@@ -44,204 +44,244 @@ const files = [
 ];
 
 const categories = [
-  { id: 'rules', title: 'Rules', containerId: 'rulesContent', description: 'Core rules, items, and mechanics imported from the rulebook sources.' },
-  { id: 'effects', title: 'Effects', containerId: 'effectsContent', description: 'Effect listings and rules extracted for easy review.' },
-  { id: 'extensions', title: 'Extensions & Expansions', containerId: 'extensionsContent', description: 'Community expansions and sheet-based modifiers pulled from the archives.' },
+  { id: 'rules', title: 'Rules', containerId: 'rulesContent' },
+  { id: 'effects', title: 'Effects', containerId: 'effectsContent' },
+  { id: 'extensions', title: 'Extensions & Expansions', containerId: 'extensionsContent' },
 ];
+
+const state = {
+  loaded: {},
+  textIndex: {},
+};
 
 const currentSearch = document.getElementById('siteSearch');
 const searchStatus = document.getElementById('searchStatus');
-const rulesContent = document.getElementById('rulesContent');
-const effectsContent = document.getElementById('effectsContent');
-const extensionsContent = document.getElementById('extensionsContent');
 const characterContent = document.getElementById('characterContent');
 const sourcesContent = document.getElementById('sourcesContent');
 
-const loadedDocs = {};
-const rawSections = {};
-const textCache = {};
-
 function formatPath(path) {
-  return encodeURI(path).replace(/%2F/g, '/');
+  return path
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
 }
 
-function safeTitle(text) {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function createElement(tag, options = {}) {
+  const element = document.createElement(tag);
+  Object.entries(options).forEach(([key, value]) => {
+    if (key === 'class') {
+      element.className = value;
+    } else if (key === 'text') {
+      element.textContent = value;
+    } else if (key === 'html') {
+      element.innerHTML = value;
+    } else {
+      element.setAttribute(key, value);
+    }
+  });
+  return element;
 }
 
-async function loadDocx(file) {
+async function fetchArrayBuffer(file) {
   const response = await fetch(formatPath(file.path));
-  if (!response.ok) throw new Error(`Unable to load ${file.title}`);
-  const arrayBuffer = await response.arrayBuffer();
-  const result = await mammoth.convertToHtml({ arrayBuffer });
-  return result.value || '<p>[No readable text was extracted]</p>';
+  if (!response.ok) {
+    throw new Error(`Unable to load file: ${file.title}`);
+  }
+  return response.arrayBuffer();
 }
 
-function buildXlsxHtml(workbook) {
-  const sheetNames = workbook.SheetNames;
-  if (sheetNames.length === 0) return '<p>[No sheets found]</p>';
+async function parseDocx(file) {
+  const arrayBuffer = await fetchArrayBuffer(file);
+  const result = await mammoth.convertToHtml({ arrayBuffer });
+  return result.value || '<p>No readable document content was extracted.</p>';
+}
 
-  return sheetNames
-    .map((sheetName) => {
-      const sheet = workbook.Sheets[sheetName];
+function buildSheetHtml(workbook) {
+  if (!workbook.SheetNames.length) {
+    return '<p>No sheets found in this workbook.</p>';
+  }
+
+  return workbook.SheetNames
+    .map((name) => {
+      const sheet = workbook.Sheets[name];
       const html = XLSX.utils.sheet_to_html(sheet, { header: '', editable: false });
-      return `<section class="sheet-block"><h4>${safeTitle(sheetName)}</h4>${html}</section>`;
+      return `<div class="sheet-block"><h3>${name}</h3>${html}</div>`;
     })
     .join('');
 }
 
-async function loadXlsx(file) {
-  const response = await fetch(formatPath(file.path));
-  if (!response.ok) throw new Error(`Unable to load ${file.title}`);
-  const arrayBuffer = await response.arrayBuffer();
+async function parseXlsx(file) {
+  const arrayBuffer = await fetchArrayBuffer(file);
   const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-  return buildXlsxHtml(workbook);
+  return buildSheetHtml(workbook);
 }
 
 async function loadFile(file) {
+  if (state.loaded[file.id]) {
+    return state.loaded[file.id];
+  }
+
+  const loadingHtml = '<div class="loading-block">Loading document...</div>';
   try {
-    if (file.type === 'docx') {
-      loadedDocs[file.id] = await loadDocx(file);
-    } else if (file.type === 'xlsx') {
-      loadedDocs[file.id] = await loadXlsx(file);
-    }
-    // Cache text content for searching
-    const tmp = document.createElement('div');
-    tmp.innerHTML = loadedDocs[file.id];
-    textCache[file.id] = tmp.textContent.toLowerCase();
+    const html = file.type === 'docx' ? await parseDocx(file) : await parseXlsx(file);
+    state.loaded[file.id] = html;
+    state.textIndex[file.id] = stripText(html);
+    return html;
   } catch (error) {
-    loadedDocs[file.id] = `<div class="error-message">${safeTitle(error.message)}</div>`;
-    textCache[file.id] = '';
+    state.loaded[file.id] = `<div class="error-message">${error.message}</div>`;
+    state.textIndex[file.id] = '';
+    return state.loaded[file.id];
   }
 }
 
-function renderDocEntry(file) {
-  const title = safeTitle(file.title);
-  const meta = `${file.type.toUpperCase()} file imported from archive`;
-  const content = loadedDocs[file.id] || '<div class="loading-block">Loading...</div>';
-
-  return `
-    <article class="doc-entry" data-doc-id="${file.id}" data-searchable="${textCache[file.id] || ''}">
-      <h3>${title}</h3>
-      <div class="doc-meta">${meta}</div>
-      <div class="doc-body">${content}</div>
-    </article>
-  `;
+function stripText(html) {
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  return temp.textContent.trim().toLowerCase();
 }
 
-function renderCategory(category) {
-  const items = files.filter((file) => file.category === category.id);
-  if (items.length === 0) {
-    return '<div class="loading-block">No imported documents available for this category.</div>';
+function createFileCard(file) {
+  const card = createElement('article', { class: 'file-card', 'data-file-id': file.id });
+  const title = createElement('h3', { text: file.title });
+  const meta = createElement('p', { class: 'preview-meta', text: `${file.type.toUpperCase()} · ${file.category}` });
+  const actions = createElement('div', { class: 'file-actions' });
+  const button = createElement('button', {
+    class: 'view-button',
+    type: 'button',
+    'data-action': 'open',
+    'data-file-id': file.id,
+    text: 'Open document',
+  });
+  actions.appendChild(button);
+  card.append(title, meta, actions);
+  return card;
+}
+
+function createCategorySection(category) {
+  const section = document.getElementById(category.containerId);
+  section.innerHTML = '';
+  const list = createElement('div', { class: 'file-list' });
+  const filesInCategory = files.filter((file) => file.category === category.id);
+
+  if (!filesInCategory.length) {
+    list.appendChild(createElement('div', { class: 'empty-state', text: 'No files available for this category.' }));
+    section.appendChild(list);
+    return;
   }
 
-  return items.map((file) => renderDocEntry(file)).join('');
+  filesInCategory.forEach((file) => list.appendChild(createFileCard(file)));
+  section.appendChild(list);
 }
 
-function createSourcesList() {
-  return files
-    .map((file) => {
-      return `<li><a href="#${file.category}">${safeTitle(file.title)}</a> — ${file.type.toUpperCase()}</li>`;
-    })
-    .join('');
+function renderSources() {
+  const wrapper = createElement('div', { class: 'file-list' });
+  files.forEach((file) => {
+    const item = createElement('div', { class: 'file-card' });
+    const title = createElement('h3', { text: file.title });
+    const meta = createElement('p', { class: 'preview-meta', text: `Type: ${file.type.toUpperCase()} · Category: ${file.category}` });
+    item.append(title, meta);
+    wrapper.appendChild(item);
+  });
+  sourcesContent.innerHTML = '';
+  sourcesContent.appendChild(wrapper);
 }
 
-function extractCharacterGuide() {
-  const keywords = [/character/i, /creation/i, /attributes?/i, /race/i, /class/i, /background/i, /skills?/i, /ability/i, /equipment/i];
-  const snippets = [];
+function renderCharacterGuide() {
+  const container = characterContent;
+  container.innerHTML = '';
+  const guide = createElement('div', { class: 'note-card' });
+  const heading = createElement('h3', { text: 'Character creation highlights' });
+  const text = createElement('p', {
+    text: 'Load one or more documents, then search to surface character creation and player guidance from the imported files.',
+  });
+  guide.append(heading, text);
+  container.appendChild(guide);
+}
 
-  Object.entries(textCache).forEach(([id, text]) => {
-    const lines = text.split(/\n|\r|\. |\? |! /).map((line) => line.trim()).filter(Boolean);
+function setSearchStatus(message) {
+  if (searchStatus) {
+    searchStatus.textContent = message;
+  }
+}
 
-    lines.forEach((line) => {
-      if (keywords.some((rx) => rx.test(line)) && snippets.length < 14) {
-        snippets.push(`<p>${safeTitle(line)}</p>`);
-      }
-    });
+function filterDocuments(query) {
+  const normalized = query.trim().toLowerCase();
+  const cards = document.querySelectorAll('.file-card[data-file-id]');
+  let visibleCount = 0;
+
+  cards.forEach((card) => {
+    const fileId = card.getAttribute('data-file-id');
+    const file = files.find((entry) => entry.id === fileId);
+    const titleMatch = file.title.toLowerCase().includes(normalized);
+    const textMatch = normalized === '' || (state.textIndex[fileId] && state.textIndex[fileId].includes(normalized));
+    const visible = normalized === '' ? true : titleMatch || textMatch;
+    card.style.display = visible ? 'grid' : 'none';
+    if (visible) visibleCount += 1;
   });
 
-  if (snippets.length === 0) {
-    return '<div class="loading-block">Character creation content is being indexed. Open the rules section to load more data.</div>';
-  }
-
-  return `
-    <div class="guide-block">
-      <p>Key character creation concepts and guidance extracted from the loaded documents.</p>
-      ${snippets.join('')}
-    </div>
-  `;
+  return visibleCount;
 }
 
-function updateSectionContent() {
-  categories.forEach((category) => {
-    const container = document.getElementById(category.containerId);
-    if (container) {
-      container.innerHTML = renderCategory(category);
-    }
+let searchTimer;
+function onSearchInput(event) {
+  window.clearTimeout(searchTimer);
+  searchTimer = window.setTimeout(() => {
+    const value = event.target.value;
+    const count = filterDocuments(value);
+    setSearchStatus(value.trim() === '' ? 'Search title or loaded text.' : `Found ${count} matching file${count === 1 ? '' : 's'}`);
+  }, 200);
+}
+
+function createPreviewContainer(fileId) {
+  const existing = document.querySelector(`.file-preview[data-file-id="${fileId}"]`);
+  if (existing) {
+    return existing;
+  }
+
+  const preview = createElement('div', { class: 'file-preview', 'data-file-id': fileId });
+  preview.innerHTML = '<div class="loading-block">Document preview will appear here after opening.</div>';
+  return preview;
+}
+
+async function openDocument(fileId) {
+  const file = files.find((item) => item.id === fileId);
+  if (!file) return;
+
+  const card = document.querySelector(`.file-card[data-file-id="${fileId}"]`);
+  if (!card) return;
+
+  let preview = card.querySelector(`.file-preview[data-file-id="${fileId}"]`);
+  if (!preview) {
+    preview = createPreviewContainer(fileId);
+    card.appendChild(preview);
+  }
+
+  preview.innerHTML = '<div class="loading-block">Loading document...</div>';
+  const html = await loadFile(file);
+  preview.innerHTML = `<div class="preview-content">${html}</div>`;
+  setSearchStatus('Document loaded. Use search to filter within titles and loaded text.');
+}
+
+async function initialize() {
+  if (!currentSearch || !searchStatus || !sourcesContent || !characterContent) {
+    console.error('Initialization failed: expected DOM elements are missing.');
+    return;
+  }
+
+  categories.forEach(createCategorySection);
+  renderSources();
+  renderCharacterGuide();
+  setSearchStatus('Search title or loaded text. Use “Open document” to load a preview.');
+
+  currentSearch.addEventListener('input', onSearchInput);
+
+  document.body.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-action="open"]');
+    if (!button) return;
+    button.disabled = true;
+    await openDocument(button.getAttribute('data-file-id'));
+    button.disabled = false;
   });
-
-  if (characterContent) {
-    characterContent.innerHTML = extractCharacterGuide();
-  }
-
-  if (sourcesContent) {
-    sourcesContent.innerHTML = `<ul>${createSourcesList()}</ul>`;
-  }
 }
 
-let searchTimeout;
-function applySearch(query) {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => {
-    const normalized = query.trim().toLowerCase();
-    const docEntries = document.querySelectorAll('.doc-entry');
-    let matchCount = 0;
-
-    docEntries.forEach((entry) => {
-      const searchable = entry.getAttribute('data-searchable') || '';
-      const matches = normalized === '' || searchable.includes(normalized);
-      entry.style.display = matches ? 'block' : 'none';
-      if (matches) matchCount += 1;
-    });
-
-    if (characterContent) {
-      characterContent.style.display = 'block';
-    }
-
-    searchStatus.textContent = normalized === ''
-      ? 'Search across imported files.'
-      : `Search results: ${matchCount} matching section${matchCount === 1 ? '' : 's'}`;
-  }, 300);
-}
-
-async function initializeWebsite() {
-  // Show loading state
-  searchStatus.textContent = 'Loading documents...';
-  
-  // Load files with request animation frame for smooth UI
-  const filePromises = [];
-  for (const file of files) {
-    filePromises.push(
-      new Promise((resolve) => {
-        requestAnimationFrame(async () => {
-          await loadFile(file);
-          resolve();
-        });
-      })
-    );
-  }
-  
-  await Promise.all(filePromises);
-  updateSectionContent();
-  searchStatus.textContent = 'Search across imported files.';
-
-  if (currentSearch) {
-    currentSearch.addEventListener('input', (event) => {
-      applySearch(event.target.value);
-    });
-  }
-}
-
-window.addEventListener('DOMContentLoaded', () => {
-  initializeWebsite();
-});
+window.addEventListener('DOMContentLoaded', initialize);
