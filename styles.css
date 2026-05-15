@@ -166,6 +166,59 @@ body {
   overflow: auto;
 }
 
+.content-sections {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.document-section {
+  border: 1px solid rgba(89, 212, 255, 0.12);
+  background: rgba(9, 17, 26, 0.95);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.section-label {
+  display: inline-block;
+  font-size: 0.75rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.section-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--accent);
+}
+
+.section-status {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.section-body {
+  min-height: 220px;
+}
+
+.section-placeholder {
+  color: var(--muted);
+  font-size: 0.95rem;
+  padding: 1rem;
+  background: rgba(255,255,255,0.03);
+  border-radius: 10px;
+}
+
 .loading-screen {
   color: var(--accent);
   text-transform: uppercase;

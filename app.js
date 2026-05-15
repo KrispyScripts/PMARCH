@@ -45,7 +45,7 @@ const files = [
 
 const currentTitle = document.getElementById('viewerTitle');
 const fileList = document.getElementById('fileList');
-const viewer = document.getElementById('viewerContent');
+const sectionsContainer = document.getElementById('contentSections');
 const statusLine = document.getElementById('statusLine');
 const typeLine = document.getElementById('typeLine');
 
@@ -59,17 +59,6 @@ function setStatus(text) {
 
 function setType(text) {
   typeLine.textContent = text;
-}
-
-function buildFileMenu() {
-  files.forEach((file) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'file-link';
-    button.textContent = file.title;
-    button.addEventListener('click', () => showFile(file));
-    fileList.appendChild(button);
-  });
 }
 
 function safeText(text) {
@@ -108,31 +97,115 @@ async function loadXlsx(file) {
   return buildXlsxHtml(workbook);
 }
 
-async function showFile(file) {
+function buildFileMenu() {
+  files.forEach((file) => {
+    const entry = document.createElement('a');
+    entry.href = `#${file.id}`;
+    entry.className = 'file-link';
+    entry.textContent = file.title;
+    entry.addEventListener('click', (event) => {
+      event.preventDefault();
+      navigateToFile(file);
+    });
+    fileList.appendChild(entry);
+  });
+}
+
+function buildContentSections() {
+  sectionsContainer.innerHTML = '';
+
+  files.forEach((file) => {
+    const section = document.createElement('section');
+    section.id = file.id;
+    section.className = 'document-section';
+    section.innerHTML = `
+      <div class="section-header">
+        <div>
+          <span class="section-label">${file.type.toUpperCase()}</span>
+          <h3>${file.title}</h3>
+        </div>
+        <div class="section-status">NOT LOADED</div>
+      </div>
+      <div class="section-body">
+        <div class="section-placeholder">Click the menu or anchor to load this document.</div>
+      </div>
+    `;
+    sectionsContainer.appendChild(section);
+  });
+}
+
+function getSectionElement(file) {
+  return document.getElementById(file.id);
+}
+
+function updateSectionStatus(file, text) {
+  const section = getSectionElement(file);
+  if (!section) return;
+  const status = section.querySelector('.section-status');
+  if (status) status.textContent = text;
+}
+
+function updateViewerHeader(file) {
   currentTitle.textContent = file.title;
-  viewer.innerHTML = '<div class="loading-screen">LOADING DOCUMENT...</div>';
-  setStatus(`READING ${file.title.toUpperCase()}`);
   setType(`TYPE: ${file.type.toUpperCase()}`);
+}
+
+async function loadSectionContent(file) {
+  const section = getSectionElement(file);
+  if (!section) return;
+  const body = section.querySelector('.section-body');
+  if (!body) return;
+
+  if (section.dataset.loaded === 'true') return;
+
+  updateSectionStatus(file, 'LOADING...');
+  setStatus(`Loading ${file.title}`);
+  updateViewerHeader(file);
 
   try {
-    let contentHtml = ''; 
+    let contentHtml;
     if (file.type === 'docx') {
       contentHtml = await loadDocx(file);
-      viewer.innerHTML = `<div class="document-body">${contentHtml}</div>`;
     } else if (file.type === 'xlsx') {
       contentHtml = await loadXlsx(file);
-      viewer.innerHTML = `<div class="document-body">${contentHtml}</div>`;
     } else {
-      viewer.innerHTML = '<p class="error-message">Unsupported file type.</p>';
+      contentHtml = '<p class="error-message">Unsupported file type.</p>';
     }
-    setStatus('READY. USE THE MENU TO OPEN OTHER MATERIALS.');
+
+    body.innerHTML = `<div class="document-body">${contentHtml}</div>`;
+    section.dataset.loaded = 'true';
+    updateSectionStatus(file, 'LOADED');
+    setStatus('Document loaded. Use the menu to jump to other sections.');
   } catch (error) {
-    viewer.innerHTML = `<pre class="error-message">${safeText(error.message)}</pre>`;
-    setStatus('FAILED TO LOAD FILE.');
+    body.innerHTML = `<pre class="error-message">${safeText(error.message)}</pre>`;
+    updateSectionStatus(file, 'FAILED');
+    setStatus('Error loading document.');
   }
 }
 
+function navigateToFile(file) {
+  loadSectionContent(file).then(() => {
+    const section = getSectionElement(file);
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.location.hash = file.id;
+    }
+  });
+}
+
+function resolveHash() {
+  const hash = window.location.hash.slice(1);
+  const file = files.find((entry) => entry.id === hash);
+  if (file) {
+    navigateToFile(file);
+  } else if (files.length) {
+    navigateToFile(files[0]);
+  }
+}
+
+window.addEventListener('hashchange', resolveHash);
 window.addEventListener('DOMContentLoaded', () => {
   buildFileMenu();
-  if (files.length > 0) showFile(files[0]);
+  buildContentSections();
+  resolveHash();
 });

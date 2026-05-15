@@ -18,7 +18,7 @@
 
     <section class="menu-panel">
       <h1>ARCHIVE INDEX</h1>
-      <p>Load rulebook content directly into the viewer. Choose a file below to render it as a text-based document or spreadsheet preview.</p>
+      <p>Browse the rule archive internally. Click any entry to jump to its content section, which is loaded and rendered inside the website.</p>
       <div id="fileList" class="file-list"></div>
     </section>
 
@@ -26,17 +26,19 @@
       <div class="viewer-header">
         <div>
           <span class="viewer-label">ACTIVE DOCUMENT</span>
-          <h2 id="viewerTitle">Loading archive...</h2>
+          <h2 id="viewerTitle">Archive content</h2>
         </div>
         <div class="viewer-meta">
           <div id="typeLine">TYPE: --</div>
-          <div id="statusLine">READY.</div>
+          <div id="statusLine">Use the archive menu to open a section</div>
         </div>
       </div>
       <div id="viewerContent" class="viewer-content">
-        <div class="loading-screen">AWAITING YOUR COMMAND</div>
+        <div id="contentSections" class="content-sections">
+          <div class="loading-screen">SELECT A DOCUMENT FROM THE MENU</div>
+        </div>
       </div>
-      <div class="viewer-footer">USE ARROW KEYS TO NAVIGATE OR CLICK A FILE ENTRY</div>
+      <div class="viewer-footer">Navigate using the menu or browser anchors</div>
     </section>
   </div>
 
