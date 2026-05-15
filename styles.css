@@ -20,6 +20,8 @@ html, body {
   min-height: 100%;
   background: linear-gradient(180deg, #010101 0%, #0b1110 100%);
   color: var(--text);
+  scroll-behavior: smooth;
+  will-change: transform;
 }
 
 body {
@@ -65,61 +67,32 @@ body {
   gap: 0.75rem;
 }
 
-.site-nav button,
-.source-button,
-.toggle-content {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.site-nav a {
+  display: inline-block;
   color: var(--text);
-  background: transparent;
+  text-decoration: none;
   border: 1px solid rgba(94, 224, 255, 0.16);
   padding: 0.65rem 0.95rem;
   border-radius: 6px;
-  font: inherit;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
   cursor: pointer;
-  transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+  will-change: background, border-color;
+  user-select: none;
 }
 
-.site-nav button:hover,
-.site-nav button:focus-visible,
-.source-button:hover,
-.source-button:focus-visible,
-.toggle-content:hover,
-.toggle-content:focus-visible {
+.site-nav a:hover,
+.site-nav a:focus-visible {
   background: rgba(94, 224, 255, 0.08);
   border-color: var(--accent);
-  transform: translateY(-1px);
+  color: var(--accent);
 }
 
-.site-nav button.active {
+.site-nav a:active {
   background: rgba(94, 224, 255, 0.12);
-  border-color: var(--accent);
 }
 
 .page-body {
   padding: 1.5rem;
-}
-
-.doc-header {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 0.75rem;
-  align-items: center;
-  margin-bottom: 0.75rem;
-}
-
-.doc-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.doc-entry h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  color: var(--accent);
 }
 
 .page-section {
@@ -169,11 +142,16 @@ body {
   color: var(--text);
   font-family: inherit;
   font-size: 1rem;
+  will-change: border-color;
 }
 
 #siteSearch:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+#siteSearch::-webkit-search-cancel-button {
+  appearance: none;
 }
 
 .search-status {
@@ -184,6 +162,7 @@ body {
 .section-content {
   display: grid;
   gap: 1rem;
+  will-change: contents;
 }
 
 .doc-entry {
@@ -191,6 +170,7 @@ body {
   background: rgba(0, 0, 0, 0.85);
   padding: 1rem;
   border-radius: 6px;
+  contain: layout style paint;
 }
 
 .doc-entry h3 {

@@ -44,18 +44,22 @@ const files = [
 ];
 
 const categories = [
-  { id: 'rules', containerId: 'rulesContent' },
-  { id: 'effects', containerId: 'effectsContent' },
-  { id: 'extensions', containerId: 'extensionsContent' },
+  { id: 'rules', title: 'Rules', containerId: 'rulesContent', description: 'Core rules, items, and mechanics imported from the rulebook sources.' },
+  { id: 'effects', title: 'Effects', containerId: 'effectsContent', description: 'Effect listings and rules extracted for easy review.' },
+  { id: 'extensions', title: 'Extensions & Expansions', containerId: 'extensionsContent', description: 'Community expansions and sheet-based modifiers pulled from the archives.' },
 ];
 
 const currentSearch = document.getElementById('siteSearch');
 const searchStatus = document.getElementById('searchStatus');
+const rulesContent = document.getElementById('rulesContent');
+const effectsContent = document.getElementById('effectsContent');
+const extensionsContent = document.getElementById('extensionsContent');
 const characterContent = document.getElementById('characterContent');
 const sourcesContent = document.getElementById('sourcesContent');
-const navButtons = Array.from(document.querySelectorAll('.site-nav button'));
 
 const loadedDocs = {};
+const rawSections = {};
+const textCache = {};
 
 function formatPath(path) {
   return encodeURI(path).replace(/%2F/g, '/');
@@ -101,29 +105,25 @@ async function loadFile(file) {
     } else if (file.type === 'xlsx') {
       loadedDocs[file.id] = await loadXlsx(file);
     }
+    // Cache text content for searching
+    const tmp = document.createElement('div');
+    tmp.innerHTML = loadedDocs[file.id];
+    textCache[file.id] = tmp.textContent.toLowerCase();
   } catch (error) {
     loadedDocs[file.id] = `<div class="error-message">${safeTitle(error.message)}</div>`;
+    textCache[file.id] = '';
   }
 }
 
 function renderDocEntry(file) {
   const title = safeTitle(file.title);
   const meta = `${file.type.toUpperCase()} file imported from archive`;
-  const content = loadedDocs[file.id]
-    ? `<div class="document-body">${loadedDocs[file.id]}</div>`
-    : '<div class="loading-block">Loading...</div>';
+  const content = loadedDocs[file.id] || '<div class="loading-block">Loading...</div>';
 
   return `
-    <article class="doc-entry" data-doc-id="${file.id}">
-      <div class="doc-header">
-        <div>
-          <h3>${title}</h3>
-          <div class="doc-meta">${meta}</div>
-        </div>
-        <div class="doc-actions">
-          <button type="button" class="toggle-content" data-doc-id="${file.id}" aria-expanded="true">Hide content</button>
-        </div>
-      </div>
+    <article class="doc-entry" data-doc-id="${file.id}" data-searchable="${textCache[file.id] || ''}">
+      <h3>${title}</h3>
+      <div class="doc-meta">${meta}</div>
       <div class="doc-body">${content}</div>
     </article>
   `;
@@ -141,12 +141,7 @@ function renderCategory(category) {
 function createSourcesList() {
   return files
     .map((file) => {
-      return `
-        <li>
-          <button type="button" class="source-button" data-target="${file.category}">${safeTitle(file.title)}</button>
-          — ${file.type.toUpperCase()}
-        </li>
-      `;
+      return `<li><a href="#${file.category}">${safeTitle(file.title)}</a> — ${file.type.toUpperCase()}</li>`;
     })
     .join('');
 }
@@ -155,8 +150,7 @@ function extractCharacterGuide() {
   const keywords = [/character/i, /creation/i, /attributes?/i, /race/i, /class/i, /background/i, /skills?/i, /ability/i, /equipment/i];
   const snippets = [];
 
-  Object.values(loadedDocs).forEach((html) => {
-    const text = html.replace(/<[^>]+>/g, ' ');
+  Object.entries(textCache).forEach(([id, text]) => {
     const lines = text.split(/\n|\r|\. |\? |! /).map((line) => line.trim()).filter(Boolean);
 
     lines.forEach((line) => {
@@ -195,76 +189,59 @@ function updateSectionContent() {
   }
 }
 
-function updateActiveNav(sectionId) {
-  navButtons.forEach((button) => {
-    button.classList.toggle('active', button.dataset.target === sectionId);
-  });
-}
-
-function scrollToSection(sectionId) {
-  const section = document.getElementById(sectionId);
-  if (!section) return;
-  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  updateActiveNav(sectionId);
-  history.replaceState(null, '', `#${sectionId}`);
-}
-
+let searchTimeout;
 function applySearch(query) {
-  const normalized = query.trim().toLowerCase();
-  const docEntries = document.querySelectorAll('.doc-entry');
-  let matchCount = 0;
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    const normalized = query.trim().toLowerCase();
+    const docEntries = document.querySelectorAll('.doc-entry');
+    let matchCount = 0;
 
-  docEntries.forEach((entry) => {
-    const text = entry.textContent.toLowerCase();
-    const matches = normalized === '' || text.includes(normalized);
-    entry.style.display = matches ? 'block' : 'none';
-    if (matches) matchCount += 1;
-  });
+    docEntries.forEach((entry) => {
+      const searchable = entry.getAttribute('data-searchable') || '';
+      const matches = normalized === '' || searchable.includes(normalized);
+      entry.style.display = matches ? 'block' : 'none';
+      if (matches) matchCount += 1;
+    });
 
-  searchStatus.textContent = normalized === ''
-    ? 'Search across imported files.'
-    : `Search results: ${matchCount} matching section${matchCount === 1 ? '' : 's'}`;
-}
+    if (characterContent) {
+      characterContent.style.display = 'block';
+    }
 
-function handleButtonClick(event) {
-  const button = event.target.closest('button');
-  if (!button) return;
-
-  const targetSection = button.dataset.target;
-  if (targetSection) {
-    scrollToSection(targetSection);
-    return;
-  }
-
-  const docId = button.dataset.docId;
-  if (button.classList.contains('toggle-content') && docId) {
-    const entry = document.querySelector(`.doc-entry[data-doc-id="${docId}"]`);
-    if (!entry) return;
-    const body = entry.querySelector('.doc-body');
-    if (!body) return;
-
-    const isVisible = body.style.display !== 'none';
-    body.style.display = isVisible ? 'none' : 'block';
-    button.textContent = isVisible ? 'Show content' : 'Hide content';
-    button.setAttribute('aria-expanded', String(!isVisible));
-  }
+    searchStatus.textContent = normalized === ''
+      ? 'Search across imported files.'
+      : `Search results: ${matchCount} matching section${matchCount === 1 ? '' : 's'}`;
+  }, 300);
 }
 
 async function initializeWebsite() {
+  // Show loading state
+  searchStatus.textContent = 'Loading documents...';
+  
+  // Load files with request animation frame for smooth UI
+  const filePromises = [];
+  for (const file of files) {
+    filePromises.push(
+      new Promise((resolve) => {
+        requestAnimationFrame(async () => {
+          await loadFile(file);
+          resolve();
+        });
+      })
+    );
+  }
+  
+  await Promise.all(filePromises);
+  updateSectionContent();
+  searchStatus.textContent = 'Search across imported files.';
+
   if (currentSearch) {
     currentSearch.addEventListener('input', (event) => {
       applySearch(event.target.value);
     });
   }
-
-  document.addEventListener('click', handleButtonClick);
-
-  const loadPromises = files.map((file) => loadFile(file));
-  await Promise.all(loadPromises);
-  updateSectionContent();
-
-  const hash = window.location.hash.slice(1);
-  scrollToSection(hash || 'home');
 }
 
-window.addEventListener('DOMContentLoaded', initializeWebsite);
+window.addEventListener('DOMContentLoaded', () => {
+  initializeWebsite();
+});
