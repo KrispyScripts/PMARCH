@@ -4,68 +4,68 @@ const files = [
     title: 'Project Moon TTRPG - Community Rulebook 3.x',
     path: 'Newest Material/Project Moon TTRPG - Community Rulebook 3.x.docx',
     type: 'docx',
+    category: 'rules',
   },
   {
     id: 'effects',
     title: 'Effect List CR 3.2',
     path: 'Newest Material/Effect List CR 3.2.docx',
     type: 'docx',
+    category: 'effects',
   },
   {
     id: 'items',
     title: 'Item List CR 3.x',
     path: 'Newest Material/Item List CR 3.x.docx',
     type: 'docx',
+    category: 'rules',
   },
   {
     id: 'functional',
     title: 'Functional Part Repository',
     path: 'Newest Material/Functional Part Repository.docx',
     type: 'docx',
+    category: 'rules',
   },
   {
     id: 'claw',
     title: 'CLAW (overCLAW) Spreadsheet',
     path: 'Newest Material/CLAW (overCLAW - Optimized, variated, enhanced and rebalanced Community-Led Additional Works).xlsx',
     type: 'xlsx',
+    category: 'extensions',
   },
   {
     id: 'sheet',
     title: 'V1.5.0 PMTRPG Sheet',
     path: 'Newest Material/V1.5.0 PMTRPG Sheet - Ruleset_Effect List Stacker & Effect Searchers & Equipment Slot Amount & OverCLAW  & I PURGED ONE OF THE TWO DEMONS & gobalamogus.xlsx',
     type: 'xlsx',
-  },
-  {
-    id: 'changelog',
-    title: '3.x Update Changelog',
-    path: 'Newest Material/3.x Update Changelog.docx',
-    type: 'docx',
+    category: 'extensions',
   },
 ];
 
-const currentTitle = document.getElementById('viewerTitle');
-const fileList = document.getElementById('fileList');
-const sectionsContainer = document.getElementById('contentSections');
-const statusLine = document.getElementById('statusLine');
-const typeLine = document.getElementById('typeLine');
+const categories = [
+  { id: 'rules', title: 'Rules', containerId: 'rulesContent', description: 'Core rules, items, and mechanics imported from the rulebook sources.' },
+  { id: 'effects', title: 'Effects', containerId: 'effectsContent', description: 'Effect listings and rules extracted for easy review.' },
+  { id: 'extensions', title: 'Extensions & Expansions', containerId: 'extensionsContent', description: 'Community expansions and sheet-based modifiers pulled from the archives.' },
+];
+
+const currentSearch = document.getElementById('siteSearch');
+const searchStatus = document.getElementById('searchStatus');
+const rulesContent = document.getElementById('rulesContent');
+const effectsContent = document.getElementById('effectsContent');
+const extensionsContent = document.getElementById('extensionsContent');
+const characterContent = document.getElementById('characterContent');
+const sourcesContent = document.getElementById('sourcesContent');
+
+const loadedDocs = {};
+const rawSections = {};
 
 function formatPath(path) {
   return encodeURI(path).replace(/%2F/g, '/');
 }
 
-function setStatus(text) {
-  statusLine.textContent = text;
-}
-
-function setType(text) {
-  typeLine.textContent = text;
-}
-
-function safeText(text) {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+function safeTitle(text) {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 async function loadDocx(file) {
@@ -77,14 +77,14 @@ async function loadDocx(file) {
 }
 
 function buildXlsxHtml(workbook) {
-  const sheets = workbook.SheetNames;
-  if (sheets.length === 0) return '<p>[No sheets found]</p>';
+  const sheetNames = workbook.SheetNames;
+  if (sheetNames.length === 0) return '<p>[No sheets found]</p>';
 
-  return sheets
-    .map((name) => {
-      const sheet = workbook.Sheets[name];
+  return sheetNames
+    .map((sheetName) => {
+      const sheet = workbook.Sheets[sheetName];
       const html = XLSX.utils.sheet_to_html(sheet, { header: '', editable: false });
-      return `<section class="sheet-block"><h3>${safeText(name)}</h3>${html}</section>`;
+      return `<section class="sheet-block"><h4>${safeTitle(sheetName)}</h4>${html}</section>`;
     })
     .join('');
 }
@@ -97,115 +97,126 @@ async function loadXlsx(file) {
   return buildXlsxHtml(workbook);
 }
 
-function buildFileMenu() {
-  files.forEach((file) => {
-    const entry = document.createElement('a');
-    entry.href = `#${file.id}`;
-    entry.className = 'file-link';
-    entry.textContent = file.title;
-    entry.addEventListener('click', (event) => {
-      event.preventDefault();
-      navigateToFile(file);
-    });
-    fileList.appendChild(entry);
-  });
-}
-
-function buildContentSections() {
-  sectionsContainer.innerHTML = '';
-
-  files.forEach((file) => {
-    const section = document.createElement('section');
-    section.id = file.id;
-    section.className = 'document-section';
-    section.innerHTML = `
-      <div class="section-header">
-        <div>
-          <span class="section-label">${file.type.toUpperCase()}</span>
-          <h3>${file.title}</h3>
-        </div>
-        <div class="section-status">NOT LOADED</div>
-      </div>
-      <div class="section-body">
-        <div class="section-placeholder">Click the menu or anchor to load this document.</div>
-      </div>
-    `;
-    sectionsContainer.appendChild(section);
-  });
-}
-
-function getSectionElement(file) {
-  return document.getElementById(file.id);
-}
-
-function updateSectionStatus(file, text) {
-  const section = getSectionElement(file);
-  if (!section) return;
-  const status = section.querySelector('.section-status');
-  if (status) status.textContent = text;
-}
-
-function updateViewerHeader(file) {
-  currentTitle.textContent = file.title;
-  setType(`TYPE: ${file.type.toUpperCase()}`);
-}
-
-async function loadSectionContent(file) {
-  const section = getSectionElement(file);
-  if (!section) return;
-  const body = section.querySelector('.section-body');
-  if (!body) return;
-
-  if (section.dataset.loaded === 'true') return;
-
-  updateSectionStatus(file, 'LOADING...');
-  setStatus(`Loading ${file.title}`);
-  updateViewerHeader(file);
-
+async function loadFile(file) {
   try {
-    let contentHtml;
     if (file.type === 'docx') {
-      contentHtml = await loadDocx(file);
+      loadedDocs[file.id] = await loadDocx(file);
     } else if (file.type === 'xlsx') {
-      contentHtml = await loadXlsx(file);
-    } else {
-      contentHtml = '<p class="error-message">Unsupported file type.</p>';
+      loadedDocs[file.id] = await loadXlsx(file);
     }
-
-    body.innerHTML = `<div class="document-body">${contentHtml}</div>`;
-    section.dataset.loaded = 'true';
-    updateSectionStatus(file, 'LOADED');
-    setStatus('Document loaded. Use the menu to jump to other sections.');
   } catch (error) {
-    body.innerHTML = `<pre class="error-message">${safeText(error.message)}</pre>`;
-    updateSectionStatus(file, 'FAILED');
-    setStatus('Error loading document.');
+    loadedDocs[file.id] = `<div class="error-message">${safeTitle(error.message)}</div>`;
   }
 }
 
-function navigateToFile(file) {
-  loadSectionContent(file).then(() => {
-    const section = getSectionElement(file);
-    if (section) {
-      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      window.location.hash = file.id;
+function renderDocEntry(file) {
+  const title = safeTitle(file.title);
+  const meta = `${file.type.toUpperCase()} file imported from archive`;
+  const content = loadedDocs[file.id] || '<div class="loading-block">Loading...</div>';
+
+  return `
+    <article class="doc-entry" data-doc-id="${file.id}">
+      <h3>${title}</h3>
+      <div class="doc-meta">${meta}</div>
+      <div class="doc-body">${content}</div>
+    </article>
+  `;
+}
+
+function renderCategory(category) {
+  const items = files.filter((file) => file.category === category.id);
+  if (items.length === 0) {
+    return '<div class="loading-block">No imported documents available for this category.</div>';
+  }
+
+  return items.map((file) => renderDocEntry(file)).join('');
+}
+
+function createSourcesList() {
+  return files
+    .map((file) => {
+      return `<li><a href="#${file.category}">${safeTitle(file.title)}</a> — ${file.type.toUpperCase()}</li>`;
+    })
+    .join('');
+}
+
+function extractCharacterGuide() {
+  const keywords = [/character/i, /creation/i, /attributes?/i, /race/i, /class/i, /background/i, /skills?/i, /ability/i, /equipment/i];
+  const snippets = [];
+
+  Object.entries(loadedDocs).forEach(([id, html]) => {
+    const text = html.replace(/<[^>]+>/g, ' ');
+    const lines = text.split(/\n|\r|\. |\? |! /).map((line) => line.trim()).filter(Boolean);
+
+    lines.forEach((line) => {
+      if (keywords.some((rx) => rx.test(line)) && snippets.length < 14) {
+        snippets.push(`<p>${safeTitle(line)}</p>`);
+      }
+    });
+  });
+
+  if (snippets.length === 0) {
+    return '<div class="loading-block">Character creation content is being indexed. Open the rules section to load more data.</div>';
+  }
+
+  return `
+    <div class="guide-block">
+      <p>Key character creation concepts and guidance extracted from the loaded documents.</p>
+      ${snippets.join('')}
+    </div>
+  `;
+}
+
+function updateSectionContent() {
+  categories.forEach((category) => {
+    const container = document.getElementById(category.containerId);
+    if (container) {
+      container.innerHTML = renderCategory(category);
     }
   });
-}
 
-function resolveHash() {
-  const hash = window.location.hash.slice(1);
-  const file = files.find((entry) => entry.id === hash);
-  if (file) {
-    navigateToFile(file);
-  } else if (files.length) {
-    navigateToFile(files[0]);
+  if (characterContent) {
+    characterContent.innerHTML = extractCharacterGuide();
+  }
+
+  if (sourcesContent) {
+    sourcesContent.innerHTML = `<ul>${createSourcesList()}</ul>`;
   }
 }
 
-window.addEventListener('hashchange', resolveHash);
+function applySearch(query) {
+  const normalized = query.trim().toLowerCase();
+  const docEntries = document.querySelectorAll('.doc-entry');
+  let matchCount = 0;
+
+  docEntries.forEach((entry) => {
+    const text = entry.textContent.toLowerCase();
+    const matches = normalized === '' || text.includes(normalized);
+    entry.style.display = matches ? 'block' : 'none';
+    if (matches) matchCount += 1;
+  });
+
+  if (characterContent) {
+    characterContent.style.display = normalized === '' ? 'block' : 'block';
+  }
+
+  searchStatus.textContent = normalized === ''
+    ? 'Search across imported files.'
+    : `Search results: ${matchCount} matching section${matchCount === 1 ? '' : 's'}`;
+}
+
+async function initializeWebsite() {
+  const loadPromises = files.map((file) => loadFile(file));
+  await Promise.all(loadPromises);
+  updateSectionContent();
+
+  if (currentSearch) {
+    currentSearch.addEventListener('input', (event) => {
+      applySearch(event.target.value);
+    });
+  }
+}
+
 window.addEventListener('DOMContentLoaded', () => {
-  buildFileMenu();
-  buildContentSections();
-  resolveHash();
+  initializeWebsite();
 });
