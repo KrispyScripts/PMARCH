@@ -44,21 +44,18 @@ const files = [
 ];
 
 const categories = [
-  { id: 'rules', title: 'Rules', containerId: 'rulesContent', description: 'Core rules, items, and mechanics imported from the rulebook sources.' },
-  { id: 'effects', title: 'Effects', containerId: 'effectsContent', description: 'Effect listings and rules extracted for easy review.' },
-  { id: 'extensions', title: 'Extensions & Expansions', containerId: 'extensionsContent', description: 'Community expansions and sheet-based modifiers pulled from the archives.' },
+  { id: 'rules', containerId: 'rulesContent' },
+  { id: 'effects', containerId: 'effectsContent' },
+  { id: 'extensions', containerId: 'extensionsContent' },
 ];
 
 const currentSearch = document.getElementById('siteSearch');
 const searchStatus = document.getElementById('searchStatus');
-const rulesContent = document.getElementById('rulesContent');
-const effectsContent = document.getElementById('effectsContent');
-const extensionsContent = document.getElementById('extensionsContent');
 const characterContent = document.getElementById('characterContent');
 const sourcesContent = document.getElementById('sourcesContent');
+const navButtons = Array.from(document.querySelectorAll('.site-nav button'));
 
 const loadedDocs = {};
-const rawSections = {};
 
 function formatPath(path) {
   return encodeURI(path).replace(/%2F/g, '/');
@@ -112,12 +109,21 @@ async function loadFile(file) {
 function renderDocEntry(file) {
   const title = safeTitle(file.title);
   const meta = `${file.type.toUpperCase()} file imported from archive`;
-  const content = loadedDocs[file.id] || '<div class="loading-block">Loading...</div>';
+  const content = loadedDocs[file.id]
+    ? `<div class="document-body">${loadedDocs[file.id]}</div>`
+    : '<div class="loading-block">Loading...</div>';
 
   return `
     <article class="doc-entry" data-doc-id="${file.id}">
-      <h3>${title}</h3>
-      <div class="doc-meta">${meta}</div>
+      <div class="doc-header">
+        <div>
+          <h3>${title}</h3>
+          <div class="doc-meta">${meta}</div>
+        </div>
+        <div class="doc-actions">
+          <button type="button" class="toggle-content" data-doc-id="${file.id}" aria-expanded="true">Hide content</button>
+        </div>
+      </div>
       <div class="doc-body">${content}</div>
     </article>
   `;
@@ -135,7 +141,12 @@ function renderCategory(category) {
 function createSourcesList() {
   return files
     .map((file) => {
-      return `<li><a href="#${file.category}">${safeTitle(file.title)}</a> — ${file.type.toUpperCase()}</li>`;
+      return `
+        <li>
+          <button type="button" class="source-button" data-target="${file.category}">${safeTitle(file.title)}</button>
+          — ${file.type.toUpperCase()}
+        </li>
+      `;
     })
     .join('');
 }
@@ -144,7 +155,7 @@ function extractCharacterGuide() {
   const keywords = [/character/i, /creation/i, /attributes?/i, /race/i, /class/i, /background/i, /skills?/i, /ability/i, /equipment/i];
   const snippets = [];
 
-  Object.entries(loadedDocs).forEach(([id, html]) => {
+  Object.values(loadedDocs).forEach((html) => {
     const text = html.replace(/<[^>]+>/g, ' ');
     const lines = text.split(/\n|\r|\. |\? |! /).map((line) => line.trim()).filter(Boolean);
 
@@ -184,6 +195,20 @@ function updateSectionContent() {
   }
 }
 
+function updateActiveNav(sectionId) {
+  navButtons.forEach((button) => {
+    button.classList.toggle('active', button.dataset.target === sectionId);
+  });
+}
+
+function scrollToSection(sectionId) {
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  updateActiveNav(sectionId);
+  history.replaceState(null, '', `#${sectionId}`);
+}
+
 function applySearch(query) {
   const normalized = query.trim().toLowerCase();
   const docEntries = document.querySelectorAll('.doc-entry');
@@ -196,27 +221,50 @@ function applySearch(query) {
     if (matches) matchCount += 1;
   });
 
-  if (characterContent) {
-    characterContent.style.display = normalized === '' ? 'block' : 'block';
-  }
-
   searchStatus.textContent = normalized === ''
     ? 'Search across imported files.'
     : `Search results: ${matchCount} matching section${matchCount === 1 ? '' : 's'}`;
 }
 
-async function initializeWebsite() {
-  const loadPromises = files.map((file) => loadFile(file));
-  await Promise.all(loadPromises);
-  updateSectionContent();
+function handleButtonClick(event) {
+  const button = event.target.closest('button');
+  if (!button) return;
 
+  const targetSection = button.dataset.target;
+  if (targetSection) {
+    scrollToSection(targetSection);
+    return;
+  }
+
+  const docId = button.dataset.docId;
+  if (button.classList.contains('toggle-content') && docId) {
+    const entry = document.querySelector(`.doc-entry[data-doc-id="${docId}"]`);
+    if (!entry) return;
+    const body = entry.querySelector('.doc-body');
+    if (!body) return;
+
+    const isVisible = body.style.display !== 'none';
+    body.style.display = isVisible ? 'none' : 'block';
+    button.textContent = isVisible ? 'Show content' : 'Hide content';
+    button.setAttribute('aria-expanded', String(!isVisible));
+  }
+}
+
+async function initializeWebsite() {
   if (currentSearch) {
     currentSearch.addEventListener('input', (event) => {
       applySearch(event.target.value);
     });
   }
+
+  document.addEventListener('click', handleButtonClick);
+
+  const loadPromises = files.map((file) => loadFile(file));
+  await Promise.all(loadPromises);
+  updateSectionContent();
+
+  const hash = window.location.hash.slice(1);
+  scrollToSection(hash || 'home');
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  initializeWebsite();
-});
+window.addEventListener('DOMContentLoaded', initializeWebsite);

@@ -65,24 +65,61 @@ body {
   gap: 0.75rem;
 }
 
-.site-nav a {
-  display: inline-block;
+.site-nav button,
+.source-button,
+.toggle-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text);
-  text-decoration: none;
+  background: transparent;
   border: 1px solid rgba(94, 224, 255, 0.16);
   padding: 0.65rem 0.95rem;
   border-radius: 6px;
-  transition: background 150ms ease, border-color 150ms ease;
+  font: inherit;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
 }
 
-.site-nav a:hover,
-.site-nav a:focus-visible {
+.site-nav button:hover,
+.site-nav button:focus-visible,
+.source-button:hover,
+.source-button:focus-visible,
+.toggle-content:hover,
+.toggle-content:focus-visible {
   background: rgba(94, 224, 255, 0.08);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.site-nav button.active {
+  background: rgba(94, 224, 255, 0.12);
   border-color: var(--accent);
 }
 
 .page-body {
   padding: 1.5rem;
+}
+
+.doc-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.doc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.doc-entry h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--accent);
 }
 
 .page-section {
